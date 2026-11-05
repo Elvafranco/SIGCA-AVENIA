@@ -3,40 +3,60 @@ import { ref, watch } from 'vue'
 const STORAGE_KEY = 'sigca_avenia_pacientes'
 const API_URL = 'http://localhost:3000/api/pacientes'
 
+// Recuperar los registros locales existentes
 function cargarPacientesLocales() {
   try {
     const datos = localStorage.getItem(STORAGE_KEY)
-    const pacientes = datos ? JSON.parse(datos) : []
-    return Array.isArray(pacientes) ? pacientes : []
+    const lista = datos ? JSON.parse(datos) : []
+    return Array.isArray(lista) ? lista : []
   } catch (error) {
-    console.error('Error al cargar pacientes:', error)
+    console.error('Error al cargar pacientes locales:', error)
     return []
   }
 }
 
-// Conservamos los pacientes existentes
 const pacientes = ref(cargarPacientesLocales())
-
 const cargando = ref(false)
 const errorPacientes = ref('')
 
-// Mantener respaldo local
+// Conservar respaldo local sin borrar registros anteriores
 watch(
   pacientes,
-  (nuevosPacientes) => {
+  (lista) => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(nuevosPacientes)
-      )
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lista))
     } catch (error) {
-      console.error('Error al guardar pacientes:', error)
+      console.error('Error al guardar respaldo:', error)
     }
   },
   { deep: true }
 )
 
-// Consultar pacientes de MongoDB
+// Identificar registros de MongoDB
+function esPacienteMongoDB(paciente) {
+  return Boolean(
+    paciente?._id &&
+    /^[a-f\d]{24}$/i.test(String(paciente._id))
+  )
+}
+
+// Preparar los datos que utiliza la interfaz
+function normalizarPaciente(paciente) {
+  return {
+    ...paciente,
+    id: paciente._id || paciente.id,
+    nombres: paciente.nombres || paciente.nombre || '',
+    apellidos: paciente.apellidos || paciente.apellido || '',
+    fechaNacimiento: paciente.fechaNacimiento || '',
+    estado: String(paciente.estado || 'activo').toLowerCase(),
+    codigo: paciente.codigo ||
+      `AV-${String(paciente.numero || '').padStart(4, '0')}`,
+    fechaRegistro: paciente.fechaRegistro ||
+      String(paciente.createdAt || '').slice(0, 10)
+  }
+}
+
+// Consultar MongoDB sin reemplazar registros locales
 async function obtenerPacientesMongoDB() {
   cargando.value = true
   errorPacientes.value = ''
@@ -45,12 +65,34 @@ async function obtenerPacientesMongoDB() {
     const respuesta = await fetch(API_URL)
 
     if (!respuesta.ok) {
-      throw new Error('No se pudieron consultar los pacientes')
+      throw new Error('No se pudieron consultar los pacientes.')
     }
 
     const datos = await respuesta.json()
 
-    return Array.isArray(datos) ? datos : []
+    if (!Array.isArray(datos)) {
+      throw new Error('La respuesta del servidor no es válida.')
+    }
+
+    const pacientesMongo = datos.map(normalizarPaciente)
+
+    const idsMongo = new Set(
+      pacientesMongo.map(p => String(p._id))
+    )
+
+    // Los registros locales no se eliminan ni se migran
+    // automáticamente para evitar pérdidas o duplicados.
+    const pacientesLocales = pacientes.value.filter(
+      p => !esPacienteMongoDB(p) ||
+        !idsMongo.has(String(p._id))
+    )
+
+    pacientes.value = [
+      ...pacientesMongo,
+      ...pacientesLocales
+    ]
+
+    return pacientesMongo
   } catch (error) {
     console.error('Error al consultar MongoDB:', error)
     errorPacientes.value = error.message
@@ -60,82 +102,107 @@ async function obtenerPacientesMongoDB() {
   }
 }
 
-// Registrar un paciente en MongoDB
+// Peticiones al backend
+async function solicitarAPI(url, opciones = {}) {
+  errorPacientes.value = ''
+
+  try {
+    const respuesta = await fetch(url, opciones)
+    const resultado = await respuesta.json()
+
+    if (!respuesta.ok) {
+      throw new Error(
+        resultado.mensaje ||
+        'No se pudo completar la operación.'
+      )
+    }
+
+    return resultado
+  } catch (error) {
+    console.error('Error de pacientes:', error)
+    errorPacientes.value = error.message
+    throw error
+  }
+}
+
+// Registrar paciente
 async function registrarPacienteMongoDB(datosPaciente) {
-  try {
-    const respuesta = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(datosPaciente)
-    })
+  const resultado = await solicitarAPI(API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(datosPaciente)
+  })
 
-    const resultado = await respuesta.json()
+  const nuevo = normalizarPaciente(resultado)
 
-    if (!respuesta.ok) {
-      throw new Error(
-        resultado.mensaje || 'No se pudo registrar el paciente'
-      )
-    }
+  pacientes.value.unshift(nuevo)
 
-    return resultado
-  } catch (error) {
-    console.error('Error al registrar paciente:', error)
-    errorPacientes.value = error.message
-    throw error
-  }
+  return nuevo
 }
 
-// Actualizar un paciente en MongoDB
+// Actualizar paciente
 async function actualizarPacienteMongoDB(id, datosPaciente) {
-  try {
-    const respuesta = await fetch(`${API_URL}/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(datosPaciente)
-    })
+  const resultado = await solicitarAPI(`${API_URL}/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(datosPaciente)
+  })
 
-    const resultado = await respuesta.json()
+  const actualizado = normalizarPaciente(resultado)
 
-    if (!respuesta.ok) {
-      throw new Error(
-        resultado.mensaje || 'No se pudo actualizar el paciente'
-      )
-    }
+  const indice = pacientes.value.findIndex(
+    p => String(p._id) === String(id)
+  )
 
-    return resultado
-  } catch (error) {
-    console.error('Error al actualizar paciente:', error)
-    errorPacientes.value = error.message
-    throw error
+  if (indice !== -1) {
+    pacientes.value[indice] = actualizado
   }
+
+  return actualizado
 }
 
-// Desactivar un paciente en MongoDB
+// Desactivar paciente
 async function desactivarPacienteMongoDB(id) {
-  try {
-    const respuesta = await fetch(
-      `${API_URL}/${id}/desactivar`,
-      { method: 'PATCH' }
-    )
+  const resultado = await solicitarAPI(
+    `${API_URL}/${id}/desactivar`,
+    { method: 'PATCH' }
+  )
 
-    const resultado = await respuesta.json()
+  const actualizado = normalizarPaciente(resultado.paciente)
 
-    if (!respuesta.ok) {
-      throw new Error(
-        resultado.mensaje || 'No se pudo desactivar el paciente'
-      )
-    }
+  const indice = pacientes.value.findIndex(
+    p => String(p._id) === String(id)
+  )
 
-    return resultado
-  } catch (error) {
-    console.error('Error al desactivar paciente:', error)
-    errorPacientes.value = error.message
-    throw error
+  if (indice !== -1) {
+    pacientes.value[indice] = actualizado
   }
+
+  return actualizado
+}
+
+// Reactivar paciente
+async function activarPacienteMongoDB(id) {
+  const resultado = await solicitarAPI(
+    `${API_URL}/${id}/activar`,
+    { method: 'PATCH' }
+  )
+
+  const actualizado = normalizarPaciente(resultado.paciente)
+
+  const indice = pacientes.value.findIndex(
+    p => String(p._id) === String(id)
+  )
+
+  if (indice !== -1) {
+    pacientes.value[indice] = actualizado
+  }
+
+  return actualizado
 }
 
 export function usePacientesStore() {
@@ -143,9 +210,11 @@ export function usePacientesStore() {
     pacientes,
     cargando,
     errorPacientes,
+    esPacienteMongoDB,
     obtenerPacientesMongoDB,
     registrarPacienteMongoDB,
     actualizarPacienteMongoDB,
-    desactivarPacienteMongoDB
+    desactivarPacienteMongoDB,
+    activarPacienteMongoDB
   }
 }

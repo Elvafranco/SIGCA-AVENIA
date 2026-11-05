@@ -1,50 +1,107 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose')
 
 const pacienteSchema = new mongoose.Schema(
   {
-    nombre: {
+    numero: {
+      type: Number,
+      default: null
+    },
+
+    codigo: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
+    nombres: {
       type: String,
       required: true,
       trim: true
     },
-    apellido: {
+
+    apellidos: {
       type: String,
-      trim: true,
-      default: ""
+      required: true,
+      trim: true
     },
+
     fechaNacimiento: {
-      type: Date,
-      default: null
+      type: String,
+      required: true
     },
+
+    sexo: {
+      type: String,
+      default: ''
+    },
+
     telefono: {
       type: String,
       trim: true,
-      default: ""
+      default: ''
     },
+
     correo: {
       type: String,
       trim: true,
-      default: ""
+      default: ''
     },
+
     direccion: {
       type: String,
       trim: true,
-      default: ""
+      default: ''
     },
+
+    motivoConsulta: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
     observaciones: {
       type: String,
       trim: true,
-      default: ""
+      default: ''
     },
+
+    responsableNombre: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
+    responsableParentesco: {
+      type: String,
+      default: ''
+    },
+
+    responsableTelefono: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
+    responsableCorreo: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+
     estado: {
       type: String,
-      enum: ["Activo", "Inactivo"],
-      default: "Activo"
+      enum: ['activo', 'inactivo'],
+      default: 'activo'
+    },
+
+    fechaRegistro: {
+      type: String,
+      default: ''
     }
   },
   {
     timestamps: true
   }
-);
+)
 
-module.exports = mongoose.model("Paciente", pacienteSchema);
+module.exports = mongoose.model('Paciente', pacienteSchema)

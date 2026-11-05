@@ -1,30 +1,19 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { usePacientesStore } from '../../stores/pacientesStore'
 import {
-  Search,
-  Plus,
-  UsersRound,
-  UserRound,
-  UserRoundCheck,
-  UserRoundX,
-  X,
-  Pencil,
-  Eye,
-  Phone,
-  Mail,
-  CalendarDays,
-  ClipboardList,
-  Save,
-  CheckCircle2,
-  AlertCircle,
-  ArrowLeft,
-  Trash2
+  Search, Plus, UsersRound, UserRound, UserRoundCheck, UserRoundX,
+  X, Pencil, Eye, Phone, Mail, CalendarDays, ClipboardList,
+  Save, CheckCircle2, AlertCircle, ArrowLeft, Trash2
 } from 'lucide-vue-next'
 
-// Estado compartido del frontend, con persistencia provisional en localStorage.
-// No utilizar datos reales de pacientes hasta implementar el backend seguro.
-const { pacientes } = usePacientesStore()
+const {
+  pacientes, cargando, errorPacientes, esPacienteMongoDB,
+  obtenerPacientesMongoDB, registrarPacienteMongoDB,
+  actualizarPacienteMongoDB, desactivarPacienteMongoDB,
+  activarPacienteMongoDB
+} = usePacientesStore()
+
 const busqueda = ref('')
 const filtroEstado = ref('todos')
 const modalAbierto = ref(false)
@@ -33,100 +22,52 @@ const modoEdicion = ref(false)
 const pacienteSeleccionado = ref(null)
 const mensaje = ref('')
 const tipoMensaje = ref('exito')
+const guardando = ref(false)
 
 const formularioVacio = () => ({
-  id: null,
-  nombres: '',
-  apellidos: '',
-  fechaNacimiento: '',
-  sexo: '',
-  telefono: '',
-  correo: '',
-  direccion: '',
-  motivoConsulta: '',
-  observaciones: '',
-  responsableNombre: '',
-  responsableParentesco: '',
-  responsableTelefono: '',
-  responsableCorreo: '',
-  estado: 'activo',
+  id: null, nombres: '', apellidos: '', fechaNacimiento: '', sexo: '',
+  telefono: '', correo: '', direccion: '', motivoConsulta: '',
+  observaciones: '', responsableNombre: '', responsableParentesco: '',
+  responsableTelefono: '', responsableCorreo: '', estado: 'activo',
   fechaRegistro: ''
 })
-
 const formulario = ref(formularioVacio())
 
 const pacientesFiltrados = computed(() => {
   const texto = busqueda.value.trim().toLowerCase()
-
-  return pacientes.value.filter((paciente) => {
-    const coincideTexto = [
-      paciente.codigo,
-      paciente.nombres,
-      paciente.apellidos,
-      paciente.responsableNombre
-    ]
-      .some(valor =>
-        String(valor || '').toLowerCase().includes(texto)
-      )
-
-    const coincideEstado =
-      filtroEstado.value === 'todos' ||
-      paciente.estado === filtroEstado.value
-
-    return coincideTexto && coincideEstado
+  return pacientes.value.filter(p => {
+    const coincideTexto = [p.codigo, p.nombres, p.apellidos, p.responsableNombre]
+      .some(valor => String(valor || '').toLowerCase().includes(texto))
+    return coincideTexto && (filtroEstado.value === 'todos' || p.estado === filtroEstado.value)
   })
 })
-
-const totalActivos = computed(() =>
-  pacientes.value.filter(p => p.estado === 'activo').length
-)
-
-const totalInactivos = computed(() =>
-  pacientes.value.filter(p => p.estado === 'inactivo').length
-)
+const totalActivos = computed(() => pacientes.value.filter(p => p.estado === 'activo').length)
+const totalInactivos = computed(() => pacientes.value.filter(p => p.estado === 'inactivo').length)
 
 function fechaLocal() {
   const fecha = new Date()
-  const anio = fecha.getFullYear()
-  const mes = String(fecha.getMonth() + 1).padStart(2, '0')
-  const dia = String(fecha.getDate()).padStart(2, '0')
-  return `${anio}-${mes}-${dia}`
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
 }
-
 function formatearFecha(fecha) {
   if (!fecha) return 'No registrada'
-
-  const [anio, mes, dia] = fecha.split('-')
-  return `${dia}/${mes}/${anio}`
+  const texto = String(fecha).slice(0, 10)
+  const partes = texto.split('-')
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : texto
 }
-
 function calcularEdad(fechaNacimiento) {
   if (!fechaNacimiento) return 'No indicada'
-
-  const nacimiento = new Date(`${fechaNacimiento}T12:00:00`)
+  const nacimiento = new Date(`${String(fechaNacimiento).slice(0, 10)}T12:00:00`)
+  if (Number.isNaN(nacimiento.getTime())) return 'No indicada'
   const hoy = new Date()
-
   let edad = hoy.getFullYear() - nacimiento.getFullYear()
-
-  const diferenciaMes =
-    hoy.getMonth() - nacimiento.getMonth()
-
-  if (
-    diferenciaMes < 0 ||
-    (diferenciaMes === 0 &&
-      hoy.getDate() < nacimiento.getDate())
-  ) {
-    edad--
-  }
-
+  const diferenciaMes = hoy.getMonth() - nacimiento.getMonth()
+  if (diferenciaMes < 0 || (diferenciaMes === 0 && hoy.getDate() < nacimiento.getDate())) edad--
   return `${edad} años`
 }
-
 function mostrarMensaje(texto, tipo = 'exito') {
   mensaje.value = texto
   tipoMensaje.value = tipo
 }
-
 function nuevoPaciente() {
   formulario.value = formularioVacio()
   modoEdicion.value = false
@@ -134,112 +75,113 @@ function nuevoPaciente() {
   detalleAbierto.value = false
   mensaje.value = ''
 }
-
 function editarPaciente(paciente) {
-  formulario.value = { ...paciente }
+  formulario.value = { ...formularioVacio(), ...paciente }
   modoEdicion.value = true
   modalAbierto.value = true
   detalleAbierto.value = false
   mensaje.value = ''
 }
-
 function verPaciente(paciente) {
   pacienteSeleccionado.value = paciente
   detalleAbierto.value = true
   modalAbierto.value = false
 }
-
 function cerrarModal() {
+  if (guardando.value) return
   modalAbierto.value = false
   formulario.value = formularioVacio()
 }
-
 function cerrarDetalle() {
+  if (guardando.value) return
   detalleAbierto.value = false
   pacienteSeleccionado.value = null
 }
-
-function guardarPaciente() {
+function datosParaAPI(f) {
+  const { id, _id, __v, createdAt, updatedAt, ...datos } = f
+  return { ...datos, estado: String(f.estado || 'activo').toLowerCase() }
+}
+async function guardarPaciente() {
+  if (guardando.value) return
   const f = formulario.value
-
   if (!f.nombres.trim() || !f.apellidos.trim()) {
-    mostrarMensaje(
-      'Ingresa los nombres y apellidos del paciente.',
-      'error'
-    )
+    mostrarMensaje('Ingresa los nombres y apellidos del paciente.', 'error')
     return
   }
-
   if (!f.fechaNacimiento) {
-    mostrarMensaje(
-      'Selecciona la fecha de nacimiento.',
-      'error'
-    )
+    mostrarMensaje('Selecciona la fecha de nacimiento.', 'error')
     return
   }
-
   if (f.fechaNacimiento > fechaLocal()) {
-    mostrarMensaje(
-      'La fecha de nacimiento no puede ser futura.',
-      'error'
-    )
+    mostrarMensaje('La fecha de nacimiento no puede ser futura.', 'error')
     return
   }
 
-  if (modoEdicion.value) {
-    const indice = pacientes.value.findIndex(
-      p => p.id === f.id
-    )
-
-    if (indice !== -1) {
-      pacientes.value[indice] = { ...f }
+  guardando.value = true
+  const editando = modoEdicion.value
+  try {
+    if (editando) {
+      if (esPacienteMongoDB(f)) {
+        await actualizarPacienteMongoDB(f._id, datosParaAPI(f))
+      } else {
+        // Registro antiguo local: conservarlo en localStorage hasta migración controlada.
+        const indice = pacientes.value.findIndex(p => p.id === f.id && !esPacienteMongoDB(p))
+        if (indice === -1) throw new Error('No se encontró el paciente local.')
+        pacientes.value[indice] = { ...f }
+      }
+    } else {
+      // Los nuevos registros se crean en MongoDB. No guardar localmente si falla.
+      const siguienteNumero = pacientes.value.reduce(
+        (maximo, p) => Math.max(maximo, Number(p.numero) || 0), 0
+      ) + 1
+      const datos = {
+        ...datosParaAPI(f),
+        numero: siguienteNumero,
+        codigo: `AV-${String(siguienteNumero).padStart(4, '0')}`,
+        fechaRegistro: fechaLocal()
+      }
+      await registrarPacienteMongoDB(datos)
     }
-  } else {
-    const siguienteNumero = pacientes.value.reduce(
-      (maximo, p) => Math.max(maximo, p.numero || 0),
-      0
-    ) + 1
-
-    const nuevo = {
-      ...f,
-      id: Date.now(),
-      numero: siguienteNumero,
-      codigo: `AV-${String(siguienteNumero).padStart(4, '0')}`,
-      fechaRegistro: fechaLocal()
-    }
-
-    pacientes.value.unshift(nuevo)
-  }
-
-  cerrarModal()
-
-  mostrarMensaje(
-    modoEdicion.value
+    modalAbierto.value = false
+    formulario.value = formularioVacio()
+    mostrarMensaje(editando
       ? 'La información del paciente se actualizó correctamente.'
-      : 'El paciente se registró correctamente.'
-  )
-}
-
-function cambiarEstado(paciente) {
-  const nuevoEstado =
-    paciente.estado === 'activo' ? 'inactivo' : 'activo'
-
-  pacientes.value = pacientes.value.map(p =>
-    p.id === paciente.id
-      ? { ...p, estado: nuevoEstado }
-      : p
-  )
-
-  if (pacienteSeleccionado.value?.id === paciente.id) {
-    pacienteSeleccionado.value = pacientes.value.find(
-      p => p.id === paciente.id
-    )
+      : 'El paciente se registró correctamente en MongoDB.')
+  } catch (error) {
+    mostrarMensaje(error.message || 'No se pudo guardar el paciente.', 'error')
+  } finally {
+    guardando.value = false
   }
-
-  mostrarMensaje(
-    `El paciente ahora se encuentra ${nuevoEstado}.`
-  )
 }
+async function cambiarEstado(paciente) {
+  if (guardando.value) return
+  const nuevoEstado = paciente.estado === 'activo' ? 'inactivo' : 'activo'
+  guardando.value = true
+  try {
+    let actualizado
+    if (esPacienteMongoDB(paciente)) {
+      actualizado = nuevoEstado === 'activo'
+        ? await activarPacienteMongoDB(paciente._id)
+        : await desactivarPacienteMongoDB(paciente._id)
+    } else {
+      actualizado = { ...paciente, estado: nuevoEstado }
+      pacientes.value = pacientes.value.map(p => p.id === paciente.id && !esPacienteMongoDB(p) ? actualizado : p)
+    }
+    if (pacienteSeleccionado.value?.id === paciente.id) pacienteSeleccionado.value = actualizado
+    mostrarMensaje(`El paciente ahora se encuentra ${nuevoEstado}.`)
+  } catch (error) {
+    mostrarMensaje(error.message || 'No se pudo cambiar el estado.', 'error')
+  } finally {
+    guardando.value = false
+  }
+}
+
+onMounted(async () => {
+  const resultado = await obtenerPacientesMongoDB()
+  if (resultado === null) {
+    mostrarMensaje('No se pudo conectar con MongoDB. Se conservan los registros locales; comprueba que el backend esté encendido.', 'error')
+  }
+})
 </script>
 
 <template>
@@ -353,6 +295,8 @@ function cambiarEstado(paciente) {
           <option value="inactivo">Inactivos</option>
         </select>
       </div>
+
+      <p v-if="cargando" role="status">Consultando pacientes de MongoDB...</p>
 
       <!-- TABLA -->
       <div v-if="pacientesFiltrados.length" class="tabla-scroll">
@@ -676,9 +620,9 @@ function cambiarEstado(paciente) {
                 Cancelar
               </button>
 
-              <button type="submit" class="boton-principal">
+              <button type="submit" class="boton-principal" :disabled="guardando">
                 <Save :size="17" />
-                {{ modoEdicion ? 'Guardar cambios' : 'Registrar paciente' }}
+                {{ guardando ? 'Guardando...' : (modoEdicion ? 'Guardar cambios' : 'Registrar paciente') }}
               </button>
             </div>
           </div>
@@ -837,6 +781,7 @@ function cambiarEstado(paciente) {
           <button
             class="boton-cancelar"
             @click="cambiarEstado(pacienteSeleccionado)"
+            :disabled="guardando"
           >
             {{
               pacienteSeleccionado.estado === 'activo'
