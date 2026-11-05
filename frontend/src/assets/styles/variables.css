@@ -1,0 +1,22 @@
+
+:root {
+  /* Identidad visual SIGCA */
+  --color-primary: #76566E;
+  --color-secondary: #B99CAB;
+  --color-champagne: #EAD9CD;
+  --color-background: #FCF9F6;
+  --color-text: #40333D;
+
+  /* Colores complementarios */
+  --color-white: #FFFFFF;
+  --color-border: #E8DFE4;
+  --color-surface: #FFFFFF;
+  --color-hover: #63465C;
+
+  /* Diseño */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  --shadow-card: 0 6px 24px rgba(64, 51, 61, 0.07);
+}

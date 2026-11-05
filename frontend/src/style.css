@@ -1,0 +1,81 @@
+/* =========================================
+   SIGCA — AVENIA
+   Estilos globales
+   ========================================= */
+
+:root {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  color: #40333d;
+  background-color: #fcf9f6;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --color-primary: #76566e;
+  --color-primary-soft: #b99cab;
+  --color-champagne: #ead9cd;
+  --color-background: #fcf9f6;
+  --color-text: #40333d;
+  --color-border: #eadfe5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  min-height: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #fcf9f6;
+  color: #40333d;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  display: block;
+  text-align: left;
+  border: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+::selection {
+  background: #ead9cd;
+  color: #40333d;
+}
